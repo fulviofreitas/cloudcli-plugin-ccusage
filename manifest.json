@@ -1,0 +1,13 @@
+{
+  "name": "ccusage",
+  "displayName": "Claude Code Cost",
+  "version": "1.0.0",
+  "description": "Displays Claude Code token usage and costs via ccusage.",
+  "author": "CloudCLI",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "server": "dist/server.js",
+  "permissions": []
+}
