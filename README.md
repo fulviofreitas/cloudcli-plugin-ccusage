@@ -15,9 +15,15 @@ npm install
 npm run build
 ```
 
-## Screenshot
+## Screenshots
 
-<!-- TODO: Add screenshot -->
+| Daily | Monthly |
+|:---:|:---:|
+| ![Daily view](screenshots/daily.png) | ![Monthly view](screenshots/monthly.png) |
+
+| Session | 5-Hour Blocks |
+|:---:|:---:|
+| ![Session view](screenshots/session.png) | ![5-Hour Blocks view](screenshots/blocks.png) |
 
 ## Requirements
 
