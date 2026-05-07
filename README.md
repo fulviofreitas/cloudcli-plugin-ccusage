@@ -25,6 +25,21 @@ npm run build
 |:---:|:---:|
 | ![Session view](screenshots/session.png) | ![5-Hour Blocks view](screenshots/blocks.png) |
 
+## Update
+
+**Option A — via CloudCLI UI:**
+Open **Settings > Plugins**, find **Claude Code Cost**, and click **Update**.
+
+**Option B — manual:**
+```bash
+cd ~/.claude-code-ui/plugins/ccusage
+git pull
+npm install
+npm run build
+```
+
+Then reload CloudCLI (refresh the browser or restart the container).
+
 ## Requirements
 
 - **Node.js** (for `npx` to run ccusage)

@@ -47,6 +47,15 @@ function shortModel(name: string): string {
     .replace(/-\d{8}$/, '');
 }
 
+function pathToProjectName(path: string): string {
+  return path.replace(/\//g, '-');
+}
+
+function projectDisplayName(projectName: string): string {
+  const m = projectName.match(/-workspace-projects-(.+)$/);
+  return m ? m[1] : projectName.replace(/^-/, '');
+}
+
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -99,12 +108,17 @@ interface State {
   since: string;
   until: string;
   offline: boolean;
+  projectFilter: string | null; // ccusage project name or null for all
 }
 
 // ── Mount / Unmount ────────────────────────────────────────────────────
 
 export function mount(container: HTMLElement, api: PluginAPI): void {
   ensureStyles();
+
+  const ctxProject = api.context.project?.path
+    ? pathToProjectName(api.context.project.path)
+    : null;
 
   const state: State = {
     view: 'daily',
@@ -115,6 +129,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     since: '',
     until: '',
     offline: false,
+    projectFilter: ctxProject,
   };
 
   const root = document.createElement('div');
@@ -138,10 +153,12 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
         const params = new URLSearchParams({ range: state.view });
         if (state.since) params.set('since', state.since.replace(/-/g, ''));
         if (state.until) params.set('until', state.until.replace(/-/g, ''));
+        if (state.projectFilter) params.set('project', state.projectFilter);
         if (noCache) params.set('nocache', '1');
         path = `range?${params}`;
       } else {
         const params = new URLSearchParams({ range: state.view });
+        if (state.projectFilter) params.set('project', state.projectFilter);
         if (noCache) params.set('nocache', '1');
         path = `summary?${params}`;
       }
@@ -201,6 +218,30 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   }
 
   function renderControls(t: Theme): string {
+    // Project scope toggle
+    let projectToggle = '';
+    if (ctxProject) {
+      const isFiltered = state.projectFilter !== null;
+      const displayName = projectDisplayName(ctxProject);
+      projectToggle = `
+        <div style="display:flex;gap:4px;margin-bottom:12px;align-items:center">
+          <button class="cc-seg-btn" id="cc-scope-project" style="
+            background:${isFiltered ? t.accent : t.surface};
+            color:${isFiltered ? t.bg : t.muted};
+            border:1px solid ${isFiltered ? t.accent : t.border};
+            font-weight:${isFiltered ? '700' : '400'};
+            font-size:0.65rem;padding:5px 12px;
+          ">${escHtml(displayName)}</button>
+          <button class="cc-seg-btn" id="cc-scope-all" style="
+            background:${!isFiltered ? t.accent : t.surface};
+            color:${!isFiltered ? t.bg : t.muted};
+            border:1px solid ${!isFiltered ? t.accent : t.border};
+            font-weight:${!isFiltered ? '700' : '400'};
+            font-size:0.65rem;padding:5px 12px;
+          ">All Projects</button>
+        </div>`;
+    }
+
     const segmented = VIEWS.map(v => {
       const active = v.key === state.view;
       return `<button class="cc-seg-btn" data-view="${v.key}" style="
@@ -237,6 +278,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
 
     return `
       <div style="margin-bottom:16px">
+        ${projectToggle}
         <div style="display:flex;gap:4px;flex-wrap:wrap">${segmented}</div>
         ${extras}
       </div>`;
@@ -257,12 +299,21 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     return `<div style="padding:16px;font-size:0.75rem;color:${t.red};background:${t.surface};border:1px solid ${t.border};border-radius:3px">${escHtml(msg)}</div>`;
   }
 
+  function filterSessions(sessions: SessionEntry[]): SessionEntry[] {
+    if (!state.projectFilter) return sessions;
+    const pf = state.projectFilter;
+    return sessions.filter(s =>
+      s.sessionId === pf ||
+      s.projectPath.startsWith(pf + '/')
+    );
+  }
+
   function renderData(t: Theme): string {
     const d = state.data as Record<string, unknown>;
     switch (state.view) {
       case 'daily': return renderDailyTable(t, (d.daily ?? []) as DailyEntry[]);
       case 'monthly': return renderMonthlyTable(t, (d.monthly ?? []) as MonthlyEntry[]);
-      case 'session': return renderSessionTable(t, (d.sessions ?? []) as SessionEntry[]);
+      case 'session': return renderSessionTable(t, filterSessions((d.sessions ?? []) as SessionEntry[]));
       case 'blocks': return renderBlocksTable(t, (d.blocks ?? []) as BlockEntry[]);
       default: return '';
     }
@@ -483,7 +534,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
       return rows.reduce((sum, r) => sum + r.totalCost, 0);
     }
     if (state.view === 'session') {
-      const rows = (d.sessions ?? []) as SessionEntry[];
+      const rows = filterSessions((d.sessions ?? []) as SessionEntry[]);
       return rows.reduce((sum, r) => sum + r.totalCost, 0);
     }
     if (state.view === 'blocks') {
@@ -494,11 +545,12 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   }
 
   function totalCostLabel(): string {
+    const scope = state.projectFilter ? projectDisplayName(state.projectFilter) : 'all projects';
     switch (state.view) {
-      case 'daily': return state.since || state.until ? 'filtered range total' : 'all-time daily total';
-      case 'monthly': return 'all-time monthly total';
-      case 'session': return 'all sessions total';
-      case 'blocks': return 'all blocks total';
+      case 'daily': return state.since || state.until ? `filtered range \u00b7 ${scope}` : `all-time daily \u00b7 ${scope}`;
+      case 'monthly': return `all-time monthly \u00b7 ${scope}`;
+      case 'session': return `all sessions \u00b7 ${scope}`;
+      case 'blocks': return `all blocks \u00b7 ${scope}`;
       default: return '';
     }
   }
@@ -507,6 +559,22 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
 
   function bindEvents(): void {
     root.querySelector('#cc-refresh')?.addEventListener('click', () => fetchData(true));
+
+    root.querySelector('#cc-scope-project')?.addEventListener('click', () => {
+      if (state.projectFilter !== ctxProject) {
+        state.projectFilter = ctxProject;
+        state.data = null;
+        fetchData();
+      }
+    });
+
+    root.querySelector('#cc-scope-all')?.addEventListener('click', () => {
+      if (state.projectFilter !== null) {
+        state.projectFilter = null;
+        state.data = null;
+        fetchData();
+      }
+    });
 
     root.querySelectorAll<HTMLButtonElement>('.cc-seg-btn[data-view]').forEach(btn => {
       btn.addEventListener('click', () => {

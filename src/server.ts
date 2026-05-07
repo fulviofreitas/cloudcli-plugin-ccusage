@@ -107,6 +107,14 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
   const noCache = url.searchParams.get('nocache') === '1';
 
+  // Helper: append --project flag for daily/monthly ranges
+  const project = url.searchParams.get('project');
+  function appendProjectArg(args: string[], range: string): void {
+    if (project && (range === 'daily' || range === 'monthly')) {
+      args.push(`--project=${project}`);
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/summary') {
     const range = url.searchParams.get('range') ?? 'daily';
     if (!VALID_RANGES.has(range)) {
@@ -116,7 +124,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     const args = [range, '--json'];
-    const cacheKey = `summary:${range}`;
+    appendProjectArg(args, range);
+    const cacheKey = `summary:${range}:${project ?? ''}`;
     const { status, body } = await fetchCcusage(args, cacheKey, noCache);
     res.writeHead(status);
     res.end(JSON.stringify(body));
@@ -132,7 +141,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     const args = [range, '--json', '--breakdown'];
-    const cacheKey = `breakdown:${range}`;
+    appendProjectArg(args, range);
+    const cacheKey = `breakdown:${range}:${project ?? ''}`;
     const { status, body } = await fetchCcusage(args, cacheKey, noCache);
     res.writeHead(status);
     res.end(JSON.stringify(body));
@@ -148,6 +158,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const args = [range, '--json'];
+    appendProjectArg(args, range);
     const since = url.searchParams.get('since');
     const until = url.searchParams.get('until');
 
@@ -169,7 +180,7 @@ const server = http.createServer(async (req, res) => {
       args.push('--until', until);
     }
 
-    const cacheKey = `range:${range}:${since ?? ''}:${until ?? ''}`;
+    const cacheKey = `range:${range}:${project ?? ''}:${since ?? ''}:${until ?? ''}`;
     const { status, body } = await fetchCcusage(args, cacheKey, noCache);
     res.writeHead(status);
     res.end(JSON.stringify(body));
